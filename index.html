@@ -29,6 +29,55 @@
             overflow: hidden;
         }
 
+        /* ======== ВЕРХНЯЯ ПАНЕЛЬ С КНОПКАМИ ======== */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 1.6rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-home, .btn-tests {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.92rem;
+            padding: 0.55rem 1.1rem;
+            border-radius: 40px;
+            transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-home {
+            background: #1e6f9f;
+            color: #ffffff;
+            box-shadow: 0 4px 10px -4px rgba(30, 111, 159, 0.5);
+        }
+
+        .btn-home:hover {
+            background: #155a82;
+            box-shadow: 0 6px 14px -4px rgba(30, 111, 159, 0.6);
+        }
+
+        .btn-tests {
+            background: #eef4f9;
+            color: #1e6f9f;
+            border: 1.5px solid #cddbe8;
+        }
+
+        .btn-tests:hover {
+            background: #e0ebf5;
+            border-color: #a6c2db;
+        }
+
+        .btn-home:active, .btn-tests:active {
+            transform: scale(0.96);
+        }
+
         .menu-screen { text-align: center; animation: fadeSlide 0.4s ease; }
 
         .menu-emoji { font-size: 3.5rem; line-height: 1; margin-bottom: 0.6rem; }
@@ -404,6 +453,7 @@
             .menu-title { font-size: 1.4rem; }
             .menu-card { padding: 1rem 1.1rem; }
             .menu-card-icon { width: 46px; height: 46px; font-size: 1.6rem; }
+            .top-bar { justify-content: center; }
         }
     </style>
 </head>
@@ -411,6 +461,11 @@
     <div class="quiz-container" id="app"></div>
 
     <script>
+        // ============================================================
+        //  ССЫЛКИ
+        // ============================================================
+        const MAIN_URL = 'https://chikontaiii.github.io/PKS-7-24/';
+
         // ============================================================
         //  ДАННЫЕ ТЕСТОВ
         // ============================================================
@@ -663,7 +718,9 @@
             test: null,
             currentIndex: 0,
             userAnswers: [],
-            answered: []
+            answered: [],
+            shuffledOptions: [],
+            shuffledCorrect: []
         };
 
         const app = document.getElementById('app');
@@ -682,11 +739,13 @@
             return true;
         }
 
-        function isAnswerCorrect(q, ans) {
+        function isAnswerCorrect(qIdx, ans) {
+            const q = state.test.questions[qIdx];
+            const correctShuffled = state.shuffledCorrect[qIdx];
             if (q.type === 'multiple') {
-                return arraysEqualAsSets(ans || [], q.correctIndexes);
+                return arraysEqualAsSets(ans || [], correctShuffled);
             }
-            return ans === q.correctIndex;
+            return ans === correctShuffled[0];
         }
 
         function isAnswerEmpty(q, ans) {
@@ -696,12 +755,60 @@
             return ans === null || ans === undefined;
         }
 
+        function shuffleArray(arr) {
+            const a = [...arr];
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [a[i], a[j]] = [a[j], a[i]];
+            }
+            return a;
+        }
+
+        function prepareShuffled(test) {
+            const shuffledOptions = [];
+            const shuffledCorrect = [];
+
+            test.questions.forEach(q => {
+                const indices = q.options.map((_, i) => i);
+                const shuffled = shuffleArray(indices);
+                shuffledOptions.push(shuffled);
+
+                if (q.type === 'multiple') {
+                    const newCorrect = [];
+                    shuffled.forEach((origIdx, displayIdx) => {
+                        if (q.correctIndexes.includes(origIdx)) {
+                            newCorrect.push(displayIdx);
+                        }
+                    });
+                    shuffledCorrect.push(newCorrect);
+                } else {
+                    const newCorrectIdx = shuffled.indexOf(q.correctIndex);
+                    shuffledCorrect.push([newCorrectIdx]);
+                }
+            });
+
+            return { shuffledOptions, shuffledCorrect };
+        }
+
+        // ============================================================
+        //  HTML-БЛОК КНОПОК ВВЕРХУ
+        // ============================================================
+        function topBarHTML() {
+            return `
+                <div class="top-bar">
+                    <a class="btn-home" href="${MAIN_URL}">🏠 На главную</a>
+                    <a class="btn-tests" href="${MAIN_URL}">🧪 К тестам</a>
+                </div>
+            `;
+        }
+
         // ============================================================
         //  МЕНЮ
         // ============================================================
         function renderMenu() {
             state.screen = 'menu';
             app.innerHTML = `
+                ${topBarHTML()}
                 <div class="menu-screen">
                     <div class="menu-emoji">🧠</div>
                     <div class="menu-title">Тесты по Базам данных</div>
@@ -767,6 +874,11 @@
             state.userAnswers = test.questions.map(q =>
                 q.type === 'multiple' ? [] : null
             );
+
+            const prepared = prepareShuffled(test);
+            state.shuffledOptions = prepared.shuffledOptions;
+            state.shuffledCorrect = prepared.shuffledCorrect;
+
             state.screen = 'quiz';
             renderQuestion();
         }
@@ -797,24 +909,28 @@
         function renderQuestion() {
             state.screen = 'quiz';
             const test = state.test;
-            const q = test.questions[state.currentIndex];
-            const isAnswered = state.answered[state.currentIndex];
-            const isLast = state.currentIndex === test.questions.length - 1;
+            const qIdx = state.currentIndex;
+            const q = test.questions[qIdx];
+            const isAnswered = state.answered[qIdx];
+            const isLast = qIdx === test.questions.length - 1;
             const qType = q.type || 'single';
-            const userAns = state.userAnswers[state.currentIndex];
+            const userAns = state.userAnswers[qIdx];
+
+            const order = state.shuffledOptions[qIdx];
+            const correctDisplayed = state.shuffledCorrect[qIdx];
 
             let optionsHtml = '';
-            q.options.forEach((opt, optIndex) => {
+            order.forEach((origIdx, displayIdx) => {
+                const opt = q.options[origIdx];
+
                 let isSelected = false;
                 if (qType === 'multiple') {
-                    isSelected = Array.isArray(userAns) && userAns.includes(optIndex);
+                    isSelected = Array.isArray(userAns) && userAns.includes(displayIdx);
                 } else {
-                    isSelected = (userAns === optIndex);
+                    isSelected = (userAns === displayIdx);
                 }
 
-                const isCorrectOpt = (qType === 'multiple')
-                    ? q.correctIndexes.includes(optIndex)
-                    : (optIndex === q.correctIndex);
+                const isCorrectOpt = correctDisplayed.includes(displayIdx);
 
                 let cls = 'option';
                 let mark = '';
@@ -835,23 +951,23 @@
                 const inputType = qType === 'multiple' ? 'checkbox' : 'radio';
 
                 optionsHtml += `
-                    <div class="${cls}" data-oidx="${optIndex}">
+                    <div class="${cls}" data-oidx="${displayIdx}">
                         <span class="mark">${mark}</span>
-                        <input type="${inputType}" name="q" value="${optIndex}"
+                        <input type="${inputType}" name="q" value="${displayIdx}"
                             ${isSelected ? 'checked' : ''}
                             ${isAnswered ? 'disabled' : ''}
-                            id="opt_${optIndex}">
-                        <label for="opt_${optIndex}">${opt}</label>
+                            id="opt_${displayIdx}">
+                        <label for="opt_${displayIdx}">${opt}</label>
                     </div>
                 `;
             });
 
             let feedbackHtml = '';
             if (isAnswered) {
-                const isCorrect = isAnswerCorrect(q, userAns);
+                const isCorrect = isAnswerCorrect(qIdx, userAns);
 
                 if (qType === 'multiple') {
-                    const correctText = q.correctIndexes.map(i => q.options[i]).join('; ');
+                    const correctText = correctDisplayed.map(i => q.options[order[i]]).join('; ');
                     feedbackHtml = `
                         <div class="feedback ${isCorrect ? 'ok' : 'no'}">
                             <span>${isCorrect ? '✓ Верно!' : '✗ Неверно.'}</span>
@@ -859,10 +975,11 @@
                         </div>
                     `;
                 } else {
+                    const correctText = q.options[order[correctDisplayed[0]]];
                     feedbackHtml = `
                         <div class="feedback ${isCorrect ? 'ok' : 'no'}">
                             <span>${isCorrect ? '✓ Верно!' : '✗ Неверно.'}</span>
-                            ${!isCorrect ? `<span style="font-weight:400; font-size:0.9rem;">Правильный ответ: <b>${q.options[q.correctIndex]}</b></span>` : ''}
+                            ${!isCorrect ? `<span style="font-weight:400; font-size:0.9rem;">Правильный ответ: <b>${correctText}</b></span>` : ''}
                         </div>
                     `;
                 }
@@ -873,6 +990,7 @@
                 : '';
 
             app.innerHTML = `
+                ${topBarHTML()}
                 <div class="progress-wrap">
                     <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
                     <div class="progress-text" id="progressText"></div>
@@ -880,7 +998,7 @@
                 <div class="card">
                     <div class="quiz-label">${test.emoji} ${test.title}</div>
                     <div class="question-header">
-                        <span class="question-number">Вопрос ${state.currentIndex + 1}</span>
+                        <span class="question-number">Вопрос ${qIdx + 1}</span>
                         <span class="question-text">${q.text}</span>
                     </div>
                     <div class="options" id="optionsBlock">
@@ -889,7 +1007,7 @@
                     ${hintHtml}
                     ${feedbackHtml}
                     <div class="nav-bar">
-                        <button class="btn btn-ghost" id="backBtn" ${state.currentIndex === 0 ? 'disabled' : ''}>← Назад</button>
+                        <button class="btn btn-ghost" id="backBtn" ${qIdx === 0 ? 'disabled' : ''}>← Назад</button>
                         <button class="btn btn-primary" id="nextBtn">
                             ${!isAnswered ? 'Ответить' : (isLast ? 'К результатам ✓' : 'Далее →')}
                         </button>
@@ -899,7 +1017,6 @@
 
             updateProgress();
 
-            // Обработчики
             if (!isAnswered) {
                 if (qType === 'single') {
                     document.querySelectorAll('.option').forEach(optionDiv => {
@@ -909,7 +1026,7 @@
                             optionDiv.classList.add('selected');
                             const radio = optionDiv.querySelector('input[type="radio"]');
                             if (radio) radio.checked = true;
-                            state.userAnswers[state.currentIndex] = oIdx;
+                            state.userAnswers[qIdx] = oIdx;
                         });
                     });
 
@@ -919,7 +1036,7 @@
                             document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
                             const parent = radio.closest('.option');
                             if (parent) parent.classList.add('selected');
-                            state.userAnswers[state.currentIndex] = oIdx;
+                            state.userAnswers[qIdx] = oIdx;
                         });
                     });
                 } else {
@@ -930,11 +1047,11 @@
                                 const checkbox = optionDiv.querySelector('input[type="checkbox"]');
                                 if (!checkbox) return;
                                 const isChecked = checkbox.checked;
-                                let current = state.userAnswers[state.currentIndex] || [];
+                                let current = state.userAnswers[qIdx] || [];
                                 current = current.filter(x => x !== oIdx);
                                 if (isChecked) current.push(oIdx);
                                 current.sort((a, b) => a - b);
-                                state.userAnswers[state.currentIndex] = current;
+                                state.userAnswers[qIdx] = current;
                                 if (isChecked) optionDiv.classList.add('selected');
                                 else optionDiv.classList.remove('selected');
                             }, 0);
@@ -945,7 +1062,7 @@
                         cb.addEventListener('change', () => {
                             const oIdx = parseInt(cb.value);
                             const parent = cb.closest('.option');
-                            let current = state.userAnswers[state.currentIndex] || [];
+                            let current = state.userAnswers[qIdx] || [];
                             current = current.filter(x => x !== oIdx);
                             if (cb.checked) {
                                 current.push(oIdx);
@@ -954,14 +1071,14 @@
                                 if (parent) parent.classList.remove('selected');
                             }
                             current.sort((a, b) => a - b);
-                            state.userAnswers[state.currentIndex] = current;
+                            state.userAnswers[qIdx] = current;
                         });
                     });
                 }
             }
 
             document.getElementById('backBtn').addEventListener('click', () => {
-                if (state.currentIndex > 0) {
+                if (qIdx > 0) {
                     state.currentIndex--;
                     renderQuestion();
                 }
@@ -969,12 +1086,12 @@
 
             document.getElementById('nextBtn').addEventListener('click', () => {
                 if (!isAnswered) {
-                    const ans = state.userAnswers[state.currentIndex];
+                    const ans = state.userAnswers[qIdx];
                     if (isAnswerEmpty(q, ans)) {
                         alert(qType === 'multiple' ? 'Пожалуйста, выберите хотя бы один вариант.' : 'Пожалуйста, выберите вариант ответа.');
                         return;
                     }
-                    state.answered[state.currentIndex] = true;
+                    state.answered[qIdx] = true;
                     renderQuestion();
                 } else {
                     if (isLast) {
@@ -997,7 +1114,7 @@
 
             let correctCount = 0;
             test.questions.forEach((q, idx) => {
-                if (isAnswerCorrect(q, state.userAnswers[idx])) correctCount++;
+                if (isAnswerCorrect(idx, state.userAnswers[idx])) correctCount++;
             });
 
             const percent = Math.round((correctCount / total) * 100);
@@ -1011,22 +1128,25 @@
             let reviewHtml = '';
             test.questions.forEach((q, idx) => {
                 const ans = state.userAnswers[idx];
-                const isCorrect = isAnswerCorrect(q, ans);
+                const isCorrect = isAnswerCorrect(idx, ans);
                 const qType = q.type || 'single';
+
+                const order = state.shuffledOptions[idx];
+                const correctDisplayed = state.shuffledCorrect[idx];
 
                 let yourAnswerText = '—';
                 let correctAnswerText = '';
 
                 if (qType === 'multiple') {
                     yourAnswerText = (ans && ans.length)
-                        ? ans.map(i => q.options[i]).join('; ')
+                        ? ans.map(i => q.options[order[i]]).join('; ')
                         : '—';
-                    correctAnswerText = q.correctIndexes.map(i => q.options[i]).join('; ');
+                    correctAnswerText = correctDisplayed.map(i => q.options[order[i]]).join('; ');
                 } else {
                     yourAnswerText = (ans !== null && ans !== undefined)
-                        ? q.options[ans]
+                        ? q.options[order[ans]]
                         : '—';
-                    correctAnswerText = q.options[q.correctIndex];
+                    correctAnswerText = q.options[order[correctDisplayed[0]]];
                 }
 
                 reviewHtml += `
@@ -1044,6 +1164,7 @@
             });
 
             app.innerHTML = `
+                ${topBarHTML()}
                 <div class="progress-wrap">
                     <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
                     <div class="progress-text" id="progressText"></div>
