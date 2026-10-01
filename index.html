@@ -50,6 +50,9 @@
             border-radius: 40px;
             transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
             white-space: nowrap;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
         }
 
         .btn-home {
@@ -792,14 +795,22 @@
 
         // ============================================================
         //  HTML-БЛОК КНОПОК ВВЕРХУ
+        //  Кнопка "К тестам" — возвращает в меню (обработчик навесим после вставки)
         // ============================================================
         function topBarHTML() {
             return `
                 <div class="top-bar">
                     <a class="btn-home" href="${MAIN_URL}">🏠 На главную</a>
-                    <a class="btn-tests" href="${MAIN_URL}">🧪 К тестам</a>
+                    <button type="button" class="btn-tests" id="toMenuBtn">🧪 К тестам</button>
                 </div>
             `;
+        }
+
+        function attachTopBarHandlers() {
+            const toMenuBtn = document.getElementById('toMenuBtn');
+            if (toMenuBtn) {
+                toMenuBtn.addEventListener('click', renderMenu);
+            }
         }
 
         // ============================================================
@@ -861,6 +872,8 @@
             document.querySelectorAll('.menu-card').forEach(card => {
                 card.addEventListener('click', () => startTest(card.dataset.test));
             });
+
+            attachTopBarHandlers();
         }
 
         // ============================================================
@@ -1016,6 +1029,7 @@
             `;
 
             updateProgress();
+            attachTopBarHandlers();
 
             if (!isAnswered) {
                 if (qType === 'single') {
@@ -1190,6 +1204,7 @@
             `;
 
             updateProgress();
+            attachTopBarHandlers();
 
             document.getElementById('restartBtn').addEventListener('click', () => startTest(test.id));
             document.getElementById('menuBtn').addEventListener('click', renderMenu);
